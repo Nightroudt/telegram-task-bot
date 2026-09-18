@@ -16,14 +16,18 @@ class TaskService:
         return TaskRead.model_validate(task)
 
     async def list_page(self, *, user_id: int, page: int) -> TaskPage:
-        """List a user's active (not-done) tasks, 1-indexed page number."""
-        page = max(page, 1)
+        """List a user's active (not-done) tasks, 1-indexed page number.
+
+        The requested page is clamped into [1, total_pages] — needed because
+        the caller's idea of "current page" can go stale (e.g. completing the
+        last task on page 2 shrinks total_pages to 1 before the next render).
+        """
+        total = await self._task_repo.count_active(user_id=user_id)
+        total_pages = max(math.ceil(total / PAGE_SIZE), 1)
+        page = min(max(page, 1), total_pages)
         offset = (page - 1) * PAGE_SIZE
 
-        tasks, total = await self._task_repo.list_active_page(
-            user_id=user_id, limit=PAGE_SIZE, offset=offset
-        )
-        total_pages = max(math.ceil(total / PAGE_SIZE), 1)
+        tasks = await self._task_repo.list_active(user_id=user_id, limit=PAGE_SIZE, offset=offset)
 
         return TaskPage(
             items=[TaskRead.model_validate(t) for t in tasks],

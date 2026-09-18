@@ -27,18 +27,23 @@ class TaskRepository(BaseRepository[Task]):
         )
         return result.scalar_one_or_none()
 
-    async def list_active_page(
-        self, *, user_id: int, limit: int, offset: int
-    ) -> tuple[list[Task], int]:
-        base_query = select(Task).where(Task.user_id == user_id, Task.is_done.is_(False))
-
-        count_query = select(func.count()).select_from(base_query.subquery())
-        total = (await self.db.execute(count_query)).scalar_one()
-
+    async def count_active(self, *, user_id: int) -> int:
         result = await self.db.execute(
-            base_query.order_by(Task.created_at, Task.id).limit(limit).offset(offset)
+            select(func.count())
+            .select_from(Task)
+            .where(Task.user_id == user_id, Task.is_done.is_(False))
         )
-        return list(result.scalars().all()), total
+        return result.scalar_one()
+
+    async def list_active(self, *, user_id: int, limit: int, offset: int) -> list[Task]:
+        result = await self.db.execute(
+            select(Task)
+            .where(Task.user_id == user_id, Task.is_done.is_(False))
+            .order_by(Task.created_at, Task.id)
+            .limit(limit)
+            .offset(offset)
+        )
+        return list(result.scalars().all())
 
     async def mark_done(self, task: Task) -> Task:
         task.is_done = True

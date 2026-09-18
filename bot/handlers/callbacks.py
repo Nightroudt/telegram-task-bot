@@ -2,7 +2,7 @@ import structlog
 from aiogram import F, Router
 from aiogram.types import CallbackQuery, Message
 
-from bot.keyboards.tasks import TaskAction, render_task_page, task_page_keyboard
+from bot.keyboards.tasks import TaskAction, TaskPageNav, render_task_page, task_page_keyboard
 from bot.services.errors import TaskNotFoundError
 from bot.services.task_service import TaskService
 
@@ -39,7 +39,7 @@ async def cb_done(
 
     logger.info("task_completed", user_id=query.from_user.id, task_id=task.id)
     await query.answer("Готово ✅")
-    await _refresh_task_list(query, task_service, page=1)
+    await _refresh_task_list(query, task_service, page=callback_data.page)
 
 
 @router.callback_query(TaskAction.filter(F.action == "delete"))
@@ -54,4 +54,12 @@ async def cb_delete(
 
     logger.info("task_deleted", user_id=query.from_user.id, task_id=callback_data.task_id)
     await query.answer("Удалено 🗑")
-    await _refresh_task_list(query, task_service, page=1)
+    await _refresh_task_list(query, task_service, page=callback_data.page)
+
+
+@router.callback_query(TaskPageNav.filter())
+async def cb_page_nav(
+    query: CallbackQuery, callback_data: TaskPageNav, task_service: TaskService
+) -> None:
+    await query.answer()
+    await _refresh_task_list(query, task_service, page=callback_data.page)
