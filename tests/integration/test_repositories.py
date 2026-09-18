@@ -1,4 +1,4 @@
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from bot.repositories.task_repo import TaskRepository
 from bot.repositories.user_repo import UserRepository
@@ -13,6 +13,29 @@ async def test_user_repository_create_and_get_by_id(db_session: AsyncSession) ->
     assert fetched is not None
     assert fetched.id == created.id
     assert fetched.username == "eleu"
+
+
+async def test_get_or_create_recovers_from_a_concurrent_registration_race(
+    session_factory: async_sessionmaker,
+) -> None:
+    """Simulates two /start updates for the same user racing each other:
+    DbSessionMiddleware gives each its own session, so both can see "not
+    found" before either commits. Whichever loses the INSERT must recover
+    instead of letting IntegrityError crash that update."""
+    async with session_factory() as session_a, session_factory() as session_b:
+        repo_a = UserRepository(session_a)
+        repo_b = UserRepository(session_b)
+
+        assert await repo_a.get_by_id(777) is None
+        assert await repo_b.get_by_id(777) is None
+
+        winner = await repo_a.create(id=777, username="a", full_name="Winner")
+        assert winner.id == 777
+
+        loser_result = await repo_b.get_or_create(id=777, username="b", full_name="Loser")
+
+        assert loser_result.id == 777
+        assert loser_result.full_name == "Winner"
 
 
 async def test_task_repository_create_and_list_active(db_session: AsyncSession) -> None:

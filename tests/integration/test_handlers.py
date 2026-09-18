@@ -39,6 +39,14 @@ async def test_newtask_rejects_blank_title(client: FakeClient) -> None:
     assert "Использование" in reply.text
 
 
+async def test_newtask_rejects_a_title_over_255_characters(client: FakeClient) -> None:
+    await client.send(777, "/start")
+
+    reply = await client.send(777, f"/newtask {'x' * 256}")
+
+    assert "слишком длинное" in reply.text
+
+
 async def test_tasks_lists_active_tasks_with_inline_keyboard(client: FakeClient) -> None:
     await client.send(777, "/start")
     await client.send(777, "/newtask Buy milk")
@@ -71,6 +79,41 @@ async def test_done_command_reports_missing_task(client: FakeClient) -> None:
     assert "не найдена" in reply.text
 
 
+async def test_done_command_rejects_non_integer_ids(client: FakeClient) -> None:
+    """str.isdigit() alone would accept Unicode "digit" characters (e.g. the
+    superscript "²") that int() then rejects — this must be a clean usage
+    message, not an unhandled ValueError."""
+    await client.send(777, "/start")
+
+    reply = await client.send(777, "/done ²")
+
+    assert "Использование" in reply.text
+
+
+async def test_done_command_rejects_ids_beyond_postgres_int4_range(client: FakeClient) -> None:
+    """tasks.id is a Postgres int4 column — an id past its range must be
+    rejected before it ever reaches the database, not surface as an
+    unhandled overflow/DataError from asyncpg."""
+    await client.send(777, "/start")
+
+    reply = await client.send(777, "/done 99999999999999999999")
+
+    assert "Использование" in reply.text
+
+
+async def test_done_twice_is_rejected_the_second_time(client: FakeClient) -> None:
+    """A duplicate tap/command must not silently re-complete the task and
+    overwrite its completed_at a second time."""
+    await client.send(777, "/start")
+    await client.send(777, "/newtask Buy milk")
+
+    first = await client.send(777, "/done 1")
+    second = await client.send(777, "/done 1")
+
+    assert "выполненной" in first.text
+    assert "не найдена" in second.text
+
+
 async def test_delete_command_removes_task(client: FakeClient) -> None:
     await client.send(777, "/start")
     await client.send(777, "/newtask Buy milk")
@@ -84,14 +127,14 @@ async def test_delete_command_removes_task(client: FakeClient) -> None:
 
 async def test_a_user_cannot_delete_someone_elses_task_via_command(client: FakeClient) -> None:
     await client.send(777, "/start")
-    await client.send(777, "/newtask Owner's task")
+    await client.send(777, "/newtask Owner task")
     await client.send(888, "/start")
 
     reply = await client.send(888, "/delete 1")
 
     assert "не найдена" in reply.text
     still_there = await client.send(777, "/tasks")
-    assert "Owner's task" in still_there.text
+    assert "Owner task" in still_there.text
 
 
 async def test_done_via_inline_button(client: FakeClient) -> None:
@@ -107,14 +150,29 @@ async def test_a_user_cannot_act_on_someone_elses_task_via_forged_callback(
     client: FakeClient,
 ) -> None:
     await client.send(777, "/start")
-    await client.send(777, "/newtask Owner's task")
+    await client.send(777, "/newtask Owner task")
     await client.send(888, "/start")
 
     reply = await client.click(888, TaskAction(action="delete", task_id=1, page=1).pack())
 
-    assert reply.text == "Задача не найдена"
+    assert reply.text == "Задача #1 не найдена"
     still_there = await client.send(777, "/tasks")
-    assert "Owner's task" in still_there.text
+    assert "Owner task" in still_there.text
+
+
+async def test_task_titles_with_html_special_characters_are_escaped(client: FakeClient) -> None:
+    """Messages are sent with parse_mode=HTML — an unescaped "<" in a task
+    title would make Telegram reject every future render of that list with
+    "can't parse entities" until the task is removed some other way."""
+    await client.send(777, "/start")
+
+    created = await client.send(777, "/newtask <b>bold</b> & co")
+    assert "&lt;b&gt;bold&lt;/b&gt; &amp; co" in created.text
+    assert "<b>" not in created.text
+
+    listed = await client.send(777, "/tasks")
+    assert "&lt;b&gt;bold&lt;/b&gt; &amp; co" in listed.text
+    assert "<b>" not in listed.text
 
 
 async def test_pagination_navigation_between_pages(client: FakeClient) -> None:

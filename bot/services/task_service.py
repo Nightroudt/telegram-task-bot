@@ -38,7 +38,10 @@ class TaskService:
 
     async def complete_task(self, *, user_id: int, task_id: int) -> TaskRead:
         task = await self._task_repo.get_owned(task_id=task_id, user_id=user_id)
-        if task is None:
+        # Already-done also counts as "not found" here: it keeps a duplicate
+        # tap (e.g. a slow client resending the same callback) from silently
+        # re-completing a task and overwriting its completed_at a second time.
+        if task is None or task.is_done:
             raise TaskNotFoundError
         completed = await self._task_repo.mark_done(task)
         return TaskRead.model_validate(completed)

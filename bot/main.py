@@ -38,10 +38,15 @@ async def main() -> None:
     try:
         await dp.start_polling(bot)
     finally:
-        # dp.start_polling already handles SIGINT/SIGTERM by cancelling its
-        # own polling task and running dp.shutdown hooks (which disposes the
-        # engine above) before returning here — this just closes the bot's
-        # own HTTP session on the way out.
+        # dp.start_polling runs dp.shutdown hooks (which disposes the engine
+        # above) in its own `finally` before returning here, on every
+        # platform — on Linux/macOS via its SIGINT/SIGTERM handler cleanly
+        # stopping the polling loop first; on Windows, where asyncio can't
+        # register a signal handler at all, via a plain KeyboardInterrupt
+        # propagating through that same `finally` (verified empirically:
+        # the hook still runs, just without the graceful in-flight-task
+        # drain the signal-handler path gets). Either way, this line just
+        # closes the bot's own HTTP session on the way out.
         await bot.session.close()
 
 

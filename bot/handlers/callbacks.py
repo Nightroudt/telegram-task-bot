@@ -32,7 +32,7 @@ async def cb_done(
             user_id=query.from_user.id, task_id=callback_data.task_id
         )
     except TaskNotFoundError:
-        await query.answer("Задача не найдена", show_alert=True)
+        await query.answer(f"Задача #{callback_data.task_id} не найдена", show_alert=True)
         return
 
     logger.info("task_completed", user_id=query.from_user.id, task_id=task.id)
@@ -46,7 +46,7 @@ async def cb_delete(
     try:
         await task_service.delete_task(user_id=query.from_user.id, task_id=callback_data.task_id)
     except TaskNotFoundError:
-        await query.answer("Задача не найдена", show_alert=True)
+        await query.answer(f"Задача #{callback_data.task_id} не найдена", show_alert=True)
         return
 
     logger.info("task_deleted", user_id=query.from_user.id, task_id=callback_data.task_id)

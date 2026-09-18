@@ -1,3 +1,5 @@
+from html import escape
+
 import structlog
 from aiogram import Router
 from aiogram.filters import CommandStart
@@ -20,7 +22,7 @@ async def cmd_start(message: Message, user_service: UserService) -> None:
     logger.info("user_registered", user_id=user.id)
 
     await message.answer(
-        f"Привет, {user.full_name}! Я помогу управлять задачами.\n\n"
+        f"Привет, {escape(user.full_name)}! Я помогу управлять задачами.\n\n"
         "Команды:\n"
         "/newtask <название> — создать задачу\n"
         "/tasks — список активных задач\n"

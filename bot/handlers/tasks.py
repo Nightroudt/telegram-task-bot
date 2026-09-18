@@ -1,3 +1,5 @@
+from html import escape
+
 import structlog
 from aiogram import Router
 from aiogram.filters import Command, CommandObject
@@ -24,13 +26,16 @@ async def cmd_newtask(
 
     try:
         data = TaskCreate(title=command.args)
-    except ValidationError:
-        await message.answer("Название задачи не может быть пустым.")
+    except ValidationError as exc:
+        if any(err["type"] == "string_too_long" for err in exc.errors()):
+            await message.answer("Название задачи слишком длинное (максимум 255 символов).")
+        else:
+            await message.answer("Название задачи не может быть пустым.")
         return
 
     task = await task_service.create_task(user_id=message.from_user.id, title=data.title)
     logger.info("task_created", user_id=message.from_user.id, task_id=task.id)
-    await message.answer(f"Задача #{task.id} «{task.title}» создана.")
+    await message.answer(f"Задача #{task.id} «{escape(task.title)}» создана.")
 
 
 async def cmd_tasks(message: Message, task_service: TaskService) -> None:
@@ -41,11 +46,32 @@ async def cmd_tasks(message: Message, task_service: TaskService) -> None:
     await message.answer(render_task_page(page), reply_markup=task_page_keyboard(page))
 
 
+# tasks.id is a Postgres int4 column; anything outside this range would
+# overflow asyncpg's encoder with an unhandled error instead of a clean
+# "not found" reply.
+_MAX_TASK_ID = 2_147_483_647
+
+
 async def _parse_task_id(message: Message, command: CommandObject) -> int | None:
-    if command.args is None or not command.args.strip().isdigit():
-        await message.answer(f"Использование: /{command.command} <id> (число, см. /tasks)")
+    usage = f"Использование: /{command.command} <id> (число, см. /tasks)"
+
+    if command.args is None:
+        await message.answer(usage)
         return None
-    return int(command.args.strip())
+
+    try:
+        # str.isdigit() is not a safe pre-check here: it accepts non-ASCII
+        # "digit" characters (e.g. superscript ²) that int() then rejects.
+        task_id = int(command.args.strip())
+    except ValueError:
+        await message.answer(usage)
+        return None
+
+    if not (1 <= task_id <= _MAX_TASK_ID):
+        await message.answer(usage)
+        return None
+
+    return task_id
 
 
 async def cmd_done(message: Message, command: CommandObject, task_service: TaskService) -> None:
@@ -63,7 +89,7 @@ async def cmd_done(message: Message, command: CommandObject, task_service: TaskS
         return
 
     logger.info("task_completed", user_id=message.from_user.id, task_id=task.id)
-    await message.answer(f"Задача #{task.id} «{task.title}» отмечена выполненной ✅")
+    await message.answer(f"Задача #{task.id} «{escape(task.title)}» отмечена выполненной ✅")
 
 
 async def cmd_delete(message: Message, command: CommandObject, task_service: TaskService) -> None:

@@ -1,3 +1,5 @@
+from html import escape
+
 from aiogram.filters.callback_data import CallbackData
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
@@ -19,7 +21,12 @@ def render_task_page(page: TaskPage) -> str:
     if not page.items:
         return "Активных задач нет 🎉"
 
-    lines = [f"#{t.id} {t.title}" for t in page.items]
+    # Messages are sent with parse_mode=HTML (see bot/main.py) — task titles
+    # are user-controlled text, not markup, so they must be escaped. Without
+    # this, a title containing "<" (e.g. "<b>" or a stray "<") makes Telegram
+    # reject the render with "can't parse entities" on every single re-render
+    # of this list until the offending task is removed some other way.
+    lines = [f"#{t.id} {escape(t.title)}" for t in page.items]
     lines.append(f"\nСтраница {page.page}/{page.total_pages}")
     return "\n".join(lines)
 
