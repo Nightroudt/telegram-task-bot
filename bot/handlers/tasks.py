@@ -9,11 +9,9 @@ from bot.schemas.task import TaskCreate
 from bot.services.errors import TaskNotFoundError
 from bot.services.task_service import TaskService
 
-router = Router(name="tasks")
 logger = structlog.get_logger()
 
 
-@router.message(Command("newtask"))
 async def cmd_newtask(
     message: Message, command: CommandObject, task_service: TaskService
 ) -> None:
@@ -35,7 +33,6 @@ async def cmd_newtask(
     await message.answer(f"Задача #{task.id} «{task.title}» создана.")
 
 
-@router.message(Command("tasks"))
 async def cmd_tasks(message: Message, task_service: TaskService) -> None:
     if message.from_user is None:
         return
@@ -51,7 +48,6 @@ async def _parse_task_id(message: Message, command: CommandObject) -> int | None
     return int(command.args.strip())
 
 
-@router.message(Command("done"))
 async def cmd_done(message: Message, command: CommandObject, task_service: TaskService) -> None:
     if message.from_user is None:
         return
@@ -70,7 +66,6 @@ async def cmd_done(message: Message, command: CommandObject, task_service: TaskS
     await message.answer(f"Задача #{task.id} «{task.title}» отмечена выполненной ✅")
 
 
-@router.message(Command("delete"))
 async def cmd_delete(message: Message, command: CommandObject, task_service: TaskService) -> None:
     if message.from_user is None:
         return
@@ -87,3 +82,12 @@ async def cmd_delete(message: Message, command: CommandObject, task_service: Tas
 
     logger.info("task_deleted", user_id=message.from_user.id, task_id=task_id)
     await message.answer(f"Задача #{task_id} удалена.")
+
+
+def build_router() -> Router:
+    router = Router(name="tasks")
+    router.message.register(cmd_newtask, Command("newtask"))
+    router.message.register(cmd_tasks, Command("tasks"))
+    router.message.register(cmd_done, Command("done"))
+    router.message.register(cmd_delete, Command("delete"))
+    return router

@@ -5,11 +5,9 @@ from aiogram.types import Message
 
 from bot.services.user_service import UserService
 
-router = Router(name="start")
 logger = structlog.get_logger()
 
 
-@router.message(CommandStart())
 async def cmd_start(message: Message, user_service: UserService) -> None:
     if message.from_user is None:
         return
@@ -29,3 +27,12 @@ async def cmd_start(message: Message, user_service: UserService) -> None:
         "/done <id> — отметить выполненной\n"
         "/delete <id> — удалить задачу"
     )
+
+
+def build_router() -> Router:
+    """A fresh Router each call — aiogram routers can only be attached to
+    one Dispatcher/parent at a time, so a module-level singleton would break
+    the moment a second Dispatcher (e.g. in tests) tries to include it."""
+    router = Router(name="start")
+    router.message.register(cmd_start, CommandStart())
+    return router

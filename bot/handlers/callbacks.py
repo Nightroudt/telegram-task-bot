@@ -6,7 +6,6 @@ from bot.keyboards.tasks import TaskAction, TaskPageNav, render_task_page, task_
 from bot.services.errors import TaskNotFoundError
 from bot.services.task_service import TaskService
 
-router = Router(name="callbacks")
 logger = structlog.get_logger()
 
 
@@ -25,7 +24,6 @@ async def _refresh_task_list(query: CallbackQuery, task_service: TaskService, pa
     )
 
 
-@router.callback_query(TaskAction.filter(F.action == "done"))
 async def cb_done(
     query: CallbackQuery, callback_data: TaskAction, task_service: TaskService
 ) -> None:
@@ -42,7 +40,6 @@ async def cb_done(
     await _refresh_task_list(query, task_service, page=callback_data.page)
 
 
-@router.callback_query(TaskAction.filter(F.action == "delete"))
 async def cb_delete(
     query: CallbackQuery, callback_data: TaskAction, task_service: TaskService
 ) -> None:
@@ -57,9 +54,16 @@ async def cb_delete(
     await _refresh_task_list(query, task_service, page=callback_data.page)
 
 
-@router.callback_query(TaskPageNav.filter())
 async def cb_page_nav(
     query: CallbackQuery, callback_data: TaskPageNav, task_service: TaskService
 ) -> None:
     await query.answer()
     await _refresh_task_list(query, task_service, page=callback_data.page)
+
+
+def build_router() -> Router:
+    router = Router(name="callbacks")
+    router.callback_query.register(cb_done, TaskAction.filter(F.action == "done"))
+    router.callback_query.register(cb_delete, TaskAction.filter(F.action == "delete"))
+    router.callback_query.register(cb_page_nav, TaskPageNav.filter())
+    return router

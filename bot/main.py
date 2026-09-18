@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from bot.core.config import settings
 from bot.core.logging import configure_logging
-from bot.handlers import router as root_router
+from bot.handlers import build_router
 from bot.middlewares import DbSessionMiddleware
 
 logger = structlog.get_logger()
@@ -26,7 +26,7 @@ async def main() -> None:
     )
     dp = Dispatcher()
     dp.update.middleware(DbSessionMiddleware(session_factory))
-    dp.include_router(root_router)
+    dp.include_router(build_router())
 
     async def on_shutdown() -> None:
         logger.info("shutting_down")
