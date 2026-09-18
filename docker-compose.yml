@@ -1,0 +1,31 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: taskbot
+      POSTGRES_PASSWORD: taskbot
+      POSTGRES_DB: taskbot
+    volumes:
+      - taskbot_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U taskbot"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  bot:
+    build: .
+    env_file:
+      - .env
+    environment:
+      # Only the docker-network hostname differs from .env.example's default
+      # (which points at localhost for running the bot outside Docker) —
+      # everything else (BOT_TOKEN, LOG_LEVEL) comes from .env.
+      DATABASE_URL: postgresql+asyncpg://taskbot:taskbot@postgres:5432/taskbot
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  taskbot_pgdata:
