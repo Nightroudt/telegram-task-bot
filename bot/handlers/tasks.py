@@ -4,21 +4,13 @@ from aiogram.filters import Command, CommandObject
 from aiogram.types import Message
 from pydantic import ValidationError
 
-from bot.schemas.task import TaskCreate, TaskPage
+from bot.keyboards.tasks import render_task_page, task_page_keyboard
+from bot.schemas.task import TaskCreate
 from bot.services.errors import TaskNotFoundError
 from bot.services.task_service import TaskService
 
 router = Router(name="tasks")
 logger = structlog.get_logger()
-
-
-def _format_task_list(page: TaskPage) -> str:
-    if not page.items:
-        return "Активных задач нет 🎉"
-
-    lines = [f"#{t.id} {t.title}" for t in page.items]
-    lines.append(f"\nСтраница {page.page}/{page.total_pages}")
-    return "\n".join(lines)
 
 
 @router.message(Command("newtask"))
@@ -49,7 +41,7 @@ async def cmd_tasks(message: Message, task_service: TaskService) -> None:
         return
 
     page = await task_service.list_page(user_id=message.from_user.id, page=1)
-    await message.answer(_format_task_list(page))
+    await message.answer(render_task_page(page), reply_markup=task_page_keyboard(page))
 
 
 async def _parse_task_id(message: Message, command: CommandObject) -> int | None:
